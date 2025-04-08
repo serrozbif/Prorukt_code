@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пошук продуктів за штрихкодом</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .product-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            display: none;
+        }
+        .product-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .edit-btn {
+            background-color: #2196F3;
+            padding: 5px 10px;
+            margin-left: 5px;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            padding: 5px 10px;
+            margin-left: 5px;
+        }
+        .edit-form, .add-form, .upload-form {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        #toggleListBtn, #toggleAddFormBtn, #toggleUploadFormBtn {
+            background-color: #607D8B;
+            margin-right: 10px;
+        }
+        #toggleListBtn:hover, #toggleAddFormBtn:hover, #toggleUploadFormBtn:hover {
+            background-color: #546E7A;
+        }
+    </style>
+</head>
+<body>
+    <h1>Пошук продуктів за штрихкодом</h1>
+    
+    <div class="container">
+        <h2>Пошук продукту</h2>
+        <input type="text" id="barcodeInput" maxlength="6" placeholder="Введіть останні 6 цифр штрихкоду">
+        <button onclick="searchProduct()">Шукати</button>
+        <div id="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Керування продуктами</h2>
+        <button id="toggleListBtn" onclick="toggleProductList()">Показати список продуктів</button>
+        <button id="toggleAddFormBtn" onclick="toggleAddForm()">Додати продукт</button>
+        <button id="toggleUploadFormBtn" onclick="toggleUploadForm()">Завантажити з файлу</button>
+        
+        <div class="add-form" id="addForm">
+            <h3>Додати новий продукт</h3>
+            <input type="text" id="newBarcode" maxlength="13" placeholder="Повний штрихкод (13 цифр)">
+            <input type="text" id="newProduct" placeholder="Назва продукту">
+            <button onclick="addProduct()">Додати</button>
+            <button onclick="toggleAddForm()" style="background-color: #f44336;">Скасувати</button>
+        </div>
+
+        <div class="upload-form" id="uploadForm">
+            <h3>Завантажити дані з файлу</h3>
+            <input type="file" id="fileInput" accept=".txt">
+            <button onclick="uploadFile()">Завантажити</button>
+            <button onclick="toggleUploadForm()" style="background-color: #f44336;">Скасувати</button>
+        </div>
+
+        <div class="product-list" id="productList"></div>
+        
+        <div class="edit-form" id="editForm">
+            <h3>Редагувати продукт</h3>
+            <input type="text" id="editBarcode" maxlength="13" placeholder="Штрихкод">
+            <input type="text" id="editProduct" placeholder="Назва">
+            <button onclick="saveEdit()">Зберегти</button>
+            <button onclick="cancelEdit()" style="background-color: #f44336;">Скасувати</button>
+        </div>
+    </div>
+
+    <script>
+        // Початкова база даних
+        let products = {
+            "4820035662273": "VIDARON A50 20 kg",
+            "4820035662266": "VIDARON A50 13 kg",
+            "4820035662259": "VIDARON A50 7 kg",
+            "4820035663812": "ACRYL-PUTZ® SF26 27 кг",
+            "4820035663805": "ACRYL-PUTZ® SF26 17 кг",
+            "4823119200033": "BAYRIS AKRYL ECO 4,2 кг",
+            "4823119200040": "BAYRIS AKRYL ECO 14 кг",
+            // Решту можна додати аналогічно
+        };
+
+        // Завантаження даних із локального сховища
+        if (localStorage.getItem('products')) {
+            products = JSON.parse(localStorage.getItem('products'));
+        }
+
+        // Оновлення списку продуктів
+        function updateProductList() {
+            const list = document.getElementById('productList');
+            list.innerHTML = '';
+            for (let barcode in products) {
+                const item = document.createElement('div');
+                item.className = 'product-item';
+                item.innerHTML = `
+                    ${barcode}: ${products[barcode]}
+                    <div>
+                        <button class="edit-btn" onclick="editProduct('${barcode}')">Редагувати</button>
+                        <button class="delete-btn" onclick="deleteProduct('${barcode}')">Видалити</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            }
+        }
+
+        // Показати/приховати список продуктів
+        function toggleProductList() {
+            const list = document.getElementById('productList');
+            const btn = document.getElementById('toggleListBtn');
+            if (list.style.display === 'none' || list.style.display === '') {
+                updateProductList();
+                list.style.display = 'block';
+                btn.textContent = 'Приховати список продуктів';
+            } else {
+                list.style.display = 'none';
+                btn.textContent = 'Показати список продуктів';
+            }
+            document.getElementById('addForm').style.display = 'none';
+            document.getElementById('toggleAddFormBtn').textContent = 'Додати продукт';
+            document.getElementById('uploadForm').style.display = 'none';
+            document.getElementById('toggleUploadFormBtn').textContent = 'Завантажити з файлу';
+            document.getElementById('editForm').style.display = 'none';
+        }
+
+        // Показати/приховати форму додавання продукту
+        function toggleAddForm() {
+            const form = document.getElementById('addForm');
+            const btn = document.getElementById('toggleAddFormBtn');
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+                btn.textContent = 'Приховати форму додавання';
+            } else {
+                form.style.display = 'none';
+                btn.textContent = 'Додати продукт';
+            }
+            document.getElementById('productList').style.display = 'none';
+            document.getElementById('toggleListBtn').textContent = 'Показати список продуктів';
+            document.getElementById('uploadForm').style.display = 'none';
+            document.getElementById('toggleUploadFormBtn').textContent = 'Завантажити з файлу';
+            document.getElementById('editForm').style.display = 'none';
+        }
+
+        // Показати/приховати форму завантаження файлу
+        function toggleUploadForm() {
+            const form = document.getElementById('uploadForm');
+            const btn = document.getElementById('toggleUploadFormBtn');
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+                btn.textContent = 'Приховати форму завантаження';
+            } else {
+                form.style.display = 'none';
+                btn.textContent = 'Завантажити з файлу';
+            }
+            document.getElementById('productList').style.display = 'none';
+            document.getElementById('toggleListBtn').textContent = 'Показати список продуктів';
+            document.getElementById('addForm').style.display = 'none';
+            document.getElementById('toggleAddFormBtn').textContent = 'Додати продукт';
+            document.getElementById('editForm').style.display = 'none';
+        }
+
+        // Пошук продукту
+        function searchProduct() {
+            const input = document.getElementById('barcodeInput').value;
+            const result = document.getElementById('result');
+            if (input.length !== 6) {
+                result.style.backgroundColor = '#ffebee';
+                result.textContent = 'Введіть рівно 6 цифр!';
+                return;
+            }
+
+            let found = false;
+            for (let barcode in products) {
+                if (barcode.slice(-6) === input) {
+                    result.style.backgroundColor = '#e8f5e9';
+                    result.textContent = `Знайдено: ${products[barcode]}`;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                result.style.backgroundColor = '#ffebee';
+                result.textContent = 'Продукт не знайдено';
+            }
+        }
+
+        // Додавання нового продукту
+        function addProduct() {
+            const barcode = document.getElementById('newBarcode').value;
+            const product = document.getElementById('newProduct').value;
+            if (barcode.length !== 13 || !product) {
+                alert('Введіть коректний штрихкод (13 цифр) та назву продукту!');
+                return;
+            }
+            if (products[barcode]) {
+                alert('Цей штрихкод уже існує!');
+                return;
+            }
+            products[barcode] = product;
+            localStorage.setItem('products', JSON.stringify(products));
+            document.getElementById('newBarcode').value = '';
+            document.getElementById('newProduct').value = '';
+            toggleAddForm();
+            if (document.getElementById('productList').style.display === 'block') {
+                updateProductList();
+            }
+        }
+
+        // Завантаження даних із файлу
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Виберіть файл для завантаження!');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                let addedCount = 0;
+                let skippedCount = 0;
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (line) {
+                        const [barcode, ...nameParts] = line.split(':');
+                        const productName = nameParts.join(':').trim();
+                        if (barcode && barcode.length === 13 && productName && !isNaN(barcode)) {
+                            if (!products[barcode]) {
+                                products[barcode] = productName;
+                                addedCount++;
+                            } else {
+                                skippedCount++;
+                            }
+                        }
+                    }
+                });
+
+                localStorage.setItem('products', JSON.stringify(products));
+                if (document.getElementById('productList').style.display === 'block') {
+                    updateProductList();
+                }
+                toggleUploadForm();
+                alert(`Додано ${addedCount} нових продуктів. Пропущено ${skippedCount} (уже існують).`);
+                fileInput.value = ''; // Очищаємо поле вводу файлу
+            };
+            reader.readAsText(file);
+        }
+
+        // Редагування продукту
+        let editingBarcode = null;
+        function editProduct(barcode) {
+            editingBarcode = barcode;
+            document.getElementById('editBarcode').value = barcode;
+            document.getElementById('editProduct').value = products[barcode];
+            document.getElementById('editForm').style.display = 'block';
+            document.getElementById('addForm').style.display = 'none';
+            document.getElementById('toggleAddFormBtn').textContent = 'Додати продукт';
+            document.getElementById('uploadForm').style.display = 'none';
+            document.getElementById('toggleUploadFormBtn').textContent = 'Завантажити з файлу';
+        }
+
+        // Збереження редагування
+        function saveEdit() {
+            const newBarcode = document.getElementById('editBarcode').value;
+            const newProduct = document.getElementById('editProduct').value;
+            if (newBarcode.length !== 13 || !newProduct) {
+                alert('Введіть коректний штрихкод (13 цифр) та назву продукту!');
+                return;
+            }
+            if (newBarcode !== editingBarcode && products[newBarcode]) {
+                alert('Цей штрихкод уже існує!');
+                return;
+            }
+            delete products[editingBarcode];
+            products[newBarcode] = newProduct;
+            localStorage.setItem('products', JSON.stringify(products));
+            if (document.getElementById('productList').style.display === 'block') {
+                updateProductList();
+            }
+            cancelEdit();
+        }
+
+        // Скасування редагування
+        function cancelEdit() {
+            document.getElementById('editForm').style.display = 'none';
+            editingBarcode = null;
+        }
+
+        // Видалення продукту
+        function deleteProduct(barcode) {
+            if (confirm(`Ви впевнені, що хочете видалити ${products[barcode]}?`)) {
+                delete products[barcode];
+                localStorage.setItem('products', JSON.stringify(products));
+                updateProductList();
+            }
+        }
+
+        // Пошук при натисканні Enter
+        document.getElementById('barcodeInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchProduct();
+        });
+    </script>
+</body>
+</html>
